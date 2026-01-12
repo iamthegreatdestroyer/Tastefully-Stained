@@ -284,3 +284,17 @@ coverage/
 
 # Benchmark results
 benchmarks/results/
+# VS Code history and temporary files
+.history/
+.vscode-settings-sync.json
+
+# Temporary analysis and verification scripts
+*_audit.py
+startup_verify.py
+route_audit.py
+
+# Generated status and plan documents (temporary)
+BACKEND_STATUS_ASSESSMENT.md
+TODO_10_EXECUTION_PLAN.md
+HANDOFF_TODO_10_PROGRESS.md
+STARTUP_VERIFICATION_PLAN.md
