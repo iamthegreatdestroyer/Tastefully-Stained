@@ -1,0 +1,64 @@
+# =============================================================================
+# TASTEFULLY STAINED - FRONTEND DEVELOPMENT DOCKERFILE
+# =============================================================================
+# Development build with hot reloading for Next.js/React
+# Port: 17710 (host) -> 3000 (container)
+#
+# Copyright (c) 2025 Tastefully Stained. All Rights Reserved.
+# =============================================================================
+
+FROM node:20-alpine
+
+LABEL maintainer="Tastefully Stained <admin@tastefullystained.com>" \
+    version="0.1.0-dev" \
+    description="Tastefully Stained Frontend - Development"
+
+# Install dependencies for native modules
+RUN apk add --no-cache \
+    libc6-compat \
+    git \
+    curl \
+    vim
+
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup \
+    && adduser -S -u 1001 -G appgroup appuser
+
+WORKDIR /app
+
+# Set environment
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHOKIDAR_USEPOLLING=true \
+    WATCHPACK_POLLING=true
+
+# Copy package files first for caching
+COPY frontend/package*.json ./
+COPY frontend/yarn.lock* ./
+COPY frontend/pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN \
+    if [ -f yarn.lock ]; then \
+    corepack enable && yarn; \
+    elif [ -f pnpm-lock.yaml ]; then \
+    corepack enable pnpm && pnpm install; \
+    elif [ -f package-lock.json ]; then \
+    npm ci; \
+    else \
+    npm install; \
+    fi
+
+# Change ownership of node_modules
+RUN chown -R appuser:appgroup /app
+
+# Source files will be mounted as volume for hot reloading
+
+# Expose port
+EXPOSE 3000
+
+# Switch to non-root user
+USER appuser
+
+# Default command - Next.js dev server
+CMD ["npm", "run", "dev"]

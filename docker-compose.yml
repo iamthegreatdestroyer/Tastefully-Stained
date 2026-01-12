@@ -1,0 +1,570 @@
+# =============================================================================
+# TASTEFULLY STAINED - DOCKER COMPOSE PRODUCTION
+# =============================================================================
+# Full-stack orchestration for production deployment
+#
+# Port Allocation (17xxx range - unique to this project):
+# - Backend API:     17700 -> 8000
+# - Backend Debug:   17701 -> 8001
+# - Frontend:        17710 -> 80
+# - Frontend Dev:    17711 -> 3000
+# - PostgreSQL:      17720 -> 5432
+# - Redis:           17730 -> 6379
+# - Blockchain:      17740 -> 8545
+# - IPFS API:        17750 -> 5001
+# - IPFS Gateway:    17751 -> 8080
+# - Prometheus:      17760 -> 9090
+# - Grafana:         17761 -> 3000
+# - Loki:            17762 -> 3100
+# - Jaeger:          17770 -> 16686
+# - MinIO:           17780 -> 9000
+# - MinIO Console:   17781 -> 9001
+#
+# Usage:
+#   docker-compose up -d              # Start all services
+#   docker-compose down               # Stop all services
+#   docker-compose logs -f backend    # Follow logs for a service
+#   docker-compose ps                 # Check service status
+#
+# Copyright (c) 2025 Tastefully Stained. All Rights Reserved.
+# =============================================================================
+
+name: tastefully-stained
+
+services:
+  # ===========================================================================
+  # BACKEND API SERVICE
+  # ===========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: tastefully-stained-backend:${TAG:-latest}
+    container_name: ts-backend
+    restart: unless-stopped
+    ports:
+      - "17700:8000"
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=info
+      - WORKERS=4
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tastefully}:${POSTGRES_PASSWORD:-stained}@postgres:5432/${POSTGRES_DB:-tastefully_stained}
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${POSTGRES_DB:-tastefully_stained}
+      - DATABASE_USER=${POSTGRES_USER:-tastefully}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-stained}
+
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+      # Security
+      - SECRET_KEY=${SECRET_KEY:?Secret key is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT secret is required}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:17710}
+
+      # Storage
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-tastefully-stained}
+
+      # IPFS
+      - IPFS_API_URL=http://ipfs:5001
+      - IPFS_GATEWAY_URL=http://ipfs:8080
+
+      # Blockchain
+      - WEB3_PROVIDER_URL=http://blockchain:8545
+      - BLOCKCHAIN_NETWORK=${BLOCKCHAIN_NETWORK:-development}
+
+      # C2PA Configuration
+      - C2PA_SIGNING_KEY_PATH=/app/keys/signing.pem
+      - C2PA_CERTIFICATE_PATH=/app/keys/certificate.pem
+
+      # Migrations
+      - RUN_MIGRATIONS=true
+
+      # Telemetry
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=tastefully-stained-backend
+
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - upload_temp:/app/temp
+      - ./keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ===========================================================================
+  # FRONTEND SERVICE
+  # ===========================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:17700}
+        - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:17710}
+        - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:17700}
+    image: tastefully-stained-frontend:${TAG:-latest}
+    container_name: ts-frontend
+    restart: unless-stopped
+    ports:
+      - "17710:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # ===========================================================================
+  # POSTGRESQL DATABASE
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ts-postgres
+    restart: unless-stopped
+    ports:
+      - "17720:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-tastefully_stained}
+      - POSTGRES_USER=${POSTGRES_USER:-tastefully}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-stained}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-tastefully} -d ${POSTGRES_DB:-tastefully_stained}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # ===========================================================================
+  # REDIS CACHE & MESSAGE BROKER
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ts-redis
+    restart: unless-stopped
+    ports:
+      - "17730:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+  # ===========================================================================
+  # BACKGROUND WORKER (CELERY)
+  # ===========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: tastefully-stained-backend:${TAG:-latest}
+    container_name: ts-worker
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.worker",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=4",
+      ]
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=info
+
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tastefully}:${POSTGRES_PASSWORD:-stained}@postgres:5432/${POSTGRES_DB:-tastefully_stained}
+
+      # Redis (Celery broker)
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+
+      # Storage
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-tastefully-stained}
+
+      # IPFS
+      - IPFS_API_URL=http://ipfs:5001
+
+      # C2PA
+      - C2PA_SIGNING_KEY_PATH=/app/keys/signing.pem
+      - C2PA_CERTIFICATE_PATH=/app/keys/certificate.pem
+
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - upload_temp:/app/temp
+      - ./keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ===========================================================================
+  # CELERY BEAT SCHEDULER
+  # ===========================================================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: tastefully-stained-backend:${TAG:-latest}
+    container_name: ts-scheduler
+    restart: unless-stopped
+    command: ["celery", "-A", "app.worker", "beat", "--loglevel=info"]
+    environment:
+      - APP_ENV=production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tastefully}:${POSTGRES_PASSWORD:-stained}@postgres:5432/${POSTGRES_DB:-tastefully_stained}
+    volumes:
+      - celerybeat_data:/app/celerybeat
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ===========================================================================
+  # IPFS NODE
+  # ===========================================================================
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: ts-ipfs
+    restart: unless-stopped
+    ports:
+      - "17750:5001" # API
+      - "17751:8080" # Gateway
+    environment:
+      - IPFS_PROFILE=server
+      - IPFS_PATH=/data/ipfs
+    volumes:
+      - ipfs_data:/data/ipfs
+      - ipfs_staging:/export
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "ipfs dag stat /ipfs/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn || exit 0",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  # ===========================================================================
+  # BLOCKCHAIN NODE (HARDHAT FOR DEV / GETH FOR PROD)
+  # ===========================================================================
+  blockchain:
+    image: node:20-alpine
+    container_name: ts-blockchain
+    restart: unless-stopped
+    working_dir: /app
+    command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
+    ports:
+      - "17740:8545"
+    volumes:
+      - ./blockchain:/app
+      - blockchain_data:/app/data
+    networks:
+      - ts-network
+    profiles:
+      - blockchain
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # ===========================================================================
+  # MINIO OBJECT STORAGE (S3-COMPATIBLE)
+  # ===========================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: ts-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "17780:9000" # S3 API
+      - "17781:9001" # Console
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_BROWSER=on
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ===========================================================================
+  # PROMETHEUS METRICS
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ts-prometheus
+    restart: unless-stopped
+    ports:
+      - "17760:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ts-network
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ===========================================================================
+  # GRAFANA DASHBOARDS
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ts-grafana
+    restart: unless-stopped
+    ports:
+      - "17761:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:17761
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ts-network
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ===========================================================================
+  # LOKI LOG AGGREGATION
+  # ===========================================================================
+  loki:
+    image: grafana/loki:latest
+    container_name: ts-loki
+    restart: unless-stopped
+    ports:
+      - "17762:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    networks:
+      - ts-network
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ===========================================================================
+  # JAEGER DISTRIBUTED TRACING
+  # ===========================================================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ts-jaeger
+    restart: unless-stopped
+    ports:
+      - "17770:16686" # UI
+      - "17771:14268" # Collector HTTP
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - ts-network
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  ts-network:
+    driver: bridge
+    name: tastefully-stained-network
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  # Application Data
+  backend_data:
+    name: ts-backend-data
+  backend_logs:
+    name: ts-backend-logs
+  upload_temp:
+    name: ts-upload-temp
+  celerybeat_data:
+    name: ts-celerybeat-data
+
+  # Database
+  postgres_data:
+    name: ts-postgres-data
+
+  # Cache
+  redis_data:
+    name: ts-redis-data
+
+  # Storage
+  minio_data:
+    name: ts-minio-data
+  ipfs_data:
+    name: ts-ipfs-data
+  ipfs_staging:
+    name: ts-ipfs-staging
+
+  # Blockchain
+  blockchain_data:
+    name: ts-blockchain-data
+
+  # Monitoring
+  prometheus_data:
+    name: ts-prometheus-data
+  grafana_data:
+    name: ts-grafana-data
+  loki_data:
+    name: ts-loki-data

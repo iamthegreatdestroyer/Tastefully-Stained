@@ -1,0 +1,116 @@
+# =============================================================================
+# TASTEFULLY STAINED - Frontend Dockerfile
+# Multi-stage build for React/TypeScript application with Vite
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies - Install node modules
+# -----------------------------------------------------------------------------
+FROM node:18-alpine as deps
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies for node-gyp (if needed for native modules)
+RUN apk add --no-cache libc6-compat
+
+# Copy package files
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+
+# Install dependencies based on lock file
+RUN \
+    if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+    elif [ -f package-lock.json ]; then npm ci; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
+    else npm install; \
+    fi
+
+# -----------------------------------------------------------------------------
+# Stage 2: Builder - Build the application
+# -----------------------------------------------------------------------------
+FROM node:18-alpine as builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY . .
+
+# Set build-time environment variables
+ARG VITE_API_URL=http://localhost:8000
+ARG VITE_BLOCKCHAIN_NETWORK=sepolia
+
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_BLOCKCHAIN_NETWORK=${VITE_BLOCKCHAIN_NETWORK}
+
+# Build the application
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 3: Production - Nginx server for static files
+# -----------------------------------------------------------------------------
+FROM nginx:alpine as production
+
+# Labels for container metadata
+LABEL maintainer="Tastefully Stained Team <dev@tastefully-stained.com>" \
+    version="0.1.0" \
+    description="Tastefully Stained Frontend - React Web Application"
+
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy custom nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/
+
+# Copy built application from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Create nginx cache and temp directories
+RUN mkdir -p /var/cache/nginx /var/run/nginx && \
+    chown -R nginx:nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://localhost:3000/ || exit 1
+
+# Expose port
+EXPOSE 3000
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+# -----------------------------------------------------------------------------
+# Stage 4: Development - Development server with hot reload
+# -----------------------------------------------------------------------------
+FROM node:18-alpine as development
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+
+# Install all dependencies including devDependencies
+RUN \
+    if [ -f yarn.lock ]; then yarn; \
+    elif [ -f package-lock.json ]; then npm install; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i; \
+    else npm install; \
+    fi
+
+# Copy source code
+COPY . .
+
+# Expose Vite dev server port
+EXPOSE 3000
+
+# Set environment variables
+ENV NODE_ENV=development
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+# Start development server
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

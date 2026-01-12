@@ -1,0 +1,366 @@
+# =============================================================================
+# TASTEFULLY STAINED - DOCKER COMPOSE DEVELOPMENT OVERRIDES
+# =============================================================================
+# Development-specific configuration that overrides docker-compose.yml
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#   
+#   Or set COMPOSE_FILE environment variable:
+#   $env:COMPOSE_FILE = "docker-compose.yml;docker-compose.dev.yml"
+#   docker-compose up -d
+#
+# Features:
+#   - Hot reload for backend (uvicorn with --reload)
+#   - Hot reload for frontend (Vite dev server)
+#   - Source code mounted as volumes
+#   - Debug ports exposed
+#   - Reduced resource limits
+#   - All monitoring services enabled by default
+#
+# Copyright (c) 2025 Tastefully Stained. All Rights Reserved.
+# =============================================================================
+
+name: tastefully-stained
+
+services:
+  # ===========================================================================
+  # BACKEND API (DEVELOPMENT)
+  # ===========================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    image: tastefully-stained-backend:dev
+    container_name: ts-backend-dev
+    ports:
+      - "17700:8000"
+      - "17701:8001"   # Debug port
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - RELOAD=true
+      
+      # Development database
+      - DATABASE_URL=postgresql+asyncpg://tastefully:stained_dev@postgres:5432/tastefully_stained_dev
+      
+      # Local Redis
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      
+      # Local storage
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+      - S3_BUCKET=tastefully-stained-dev
+      
+      # IPFS
+      - IPFS_API_URL=http://ipfs:5001
+      
+      # C2PA (development keys)
+      - C2PA_SIGNING_KEY_PATH=/app/keys/dev-signing.pem
+      - C2PA_CERTIFICATE_PATH=/app/keys/dev-certificate.pem
+      
+    volumes:
+      # Mount source code for hot reload
+      - ./src/backend:/app/src:cached
+      - ./tests:/app/tests:cached
+      - ./keys:/app/keys:ro
+      
+      # Persistent data
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - upload_temp:/app/temp
+      
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app/src
+      --log-level debug
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # ===========================================================================
+  # FRONTEND (DEVELOPMENT)
+  # ===========================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile.dev
+    image: tastefully-stained-frontend:dev
+    container_name: ts-frontend-dev
+    ports:
+      - "17710:3000"   # Vite dev server
+      - "17712:24678"  # HMR WebSocket
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:17700
+      - VITE_WS_URL=ws://localhost:17700
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      # Mount source code for hot reload
+      - ./src/frontend:/app/src:cached
+      - ./src/frontend/public:/app/public:cached
+      - ./src/frontend/index.html:/app/index.html:cached
+      - ./src/frontend/vite.config.ts:/app/vite.config.ts:cached
+      - ./src/frontend/tsconfig.json:/app/tsconfig.json:cached
+      - ./src/frontend/tailwind.config.js:/app/tailwind.config.js:cached
+      
+      # Exclude node_modules from mount
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # POSTGRESQL (DEVELOPMENT)
+  # ===========================================================================
+  postgres:
+    container_name: ts-postgres-dev
+    environment:
+      - POSTGRES_USER=tastefully
+      - POSTGRES_PASSWORD=stained_dev
+      - POSTGRES_DB=tastefully_stained_dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ===========================================================================
+  # REDIS (DEVELOPMENT)
+  # ===========================================================================
+  redis:
+    container_name: ts-redis-dev
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --loglevel debug
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # CELERY WORKER (DEVELOPMENT)
+  # ===========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    image: tastefully-stained-backend:dev
+    container_name: ts-worker-dev
+    command: >
+      celery -A app.worker worker
+      --loglevel=debug
+      --concurrency=2
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - DATABASE_URL=postgresql+asyncpg://tastefully:stained_dev@postgres:5432/tastefully_stained_dev
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - ./src/backend:/app/src:cached
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # CELERY BEAT SCHEDULER (DEVELOPMENT)
+  # ===========================================================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    image: tastefully-stained-backend:dev
+    container_name: ts-scheduler-dev
+    command: celery -A app.worker beat --loglevel=debug
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://tastefully:stained_dev@postgres:5432/tastefully_stained_dev
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+
+  # ===========================================================================
+  # IPFS (DEVELOPMENT)
+  # ===========================================================================
+  ipfs:
+    container_name: ts-ipfs-dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # BLOCKCHAIN NODE (DEVELOPMENT - Always enabled)
+  # ===========================================================================
+  blockchain:
+    container_name: ts-blockchain-dev
+    profiles: []  # Empty profiles = always enabled in dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ===========================================================================
+  # MINIO (DEVELOPMENT)
+  # ===========================================================================
+  minio:
+    container_name: ts-minio-dev
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # PROMETHEUS (DEVELOPMENT - Always enabled)
+  # ===========================================================================
+  prometheus:
+    container_name: ts-prometheus-dev
+    profiles: []  # Empty profiles = always enabled in dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # GRAFANA (DEVELOPMENT - Always enabled)
+  # ===========================================================================
+  grafana:
+    container_name: ts-grafana-dev
+    profiles: []  # Empty profiles = always enabled in dev
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # LOKI (DEVELOPMENT - Always enabled)
+  # ===========================================================================
+  loki:
+    container_name: ts-loki-dev
+    profiles: []  # Empty profiles = always enabled in dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # JAEGER (DEVELOPMENT - Always enabled)
+  # ===========================================================================
+  jaeger:
+    container_name: ts-jaeger-dev
+    profiles: []  # Empty profiles = always enabled in dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # MAILHOG (DEVELOPMENT ONLY - Email Testing)
+  # ===========================================================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ts-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "17790:8025"   # Web UI
+      - "17791:1025"   # SMTP
+    networks:
+      - ts-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
+  # ===========================================================================
+  # PGADMIN (DEVELOPMENT ONLY - Database Management)
+  # ===========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ts-pgadmin-dev
+    restart: unless-stopped
+    ports:
+      - "17792:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@tastefully-stained.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - ts-network
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===========================================================================
+  # REDIS COMMANDER (DEVELOPMENT ONLY - Redis GUI)
+  # ===========================================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ts-redis-commander-dev
+    restart: unless-stopped
+    ports:
+      - "17793:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - ts-network
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+
+# =============================================================================
+# ADDITIONAL DEVELOPMENT VOLUMES
+# =============================================================================
+volumes:
+  pgadmin_data:
+    name: ts-pgadmin-data

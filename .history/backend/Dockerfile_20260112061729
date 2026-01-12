@@ -1,0 +1,150 @@
+# =============================================================================
+# TASTEFULLY STAINED - Backend Dockerfile
+# Multi-stage build for Python FastAPI application
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Install dependencies
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG PYTHON_VERSION=3.11
+
+# Set environment variables for Python
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Stage 2: Runtime - Production image
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim as runtime
+
+# Labels for container metadata
+LABEL maintainer="Tastefully Stained Team <dev@tastefully-stained.com>" \
+      version="0.1.0" \
+      description="Tastefully Stained Backend API - C2PA Watermarking Service"
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    APP_HOME=/app \
+    APP_USER=appuser \
+    APP_GROUP=appgroup
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 ${APP_GROUP} && \
+    useradd --uid 1000 --gid ${APP_GROUP} --shell /bin/bash --create-home ${APP_USER}
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Set working directory
+WORKDIR ${APP_HOME}
+
+# Copy application code
+COPY --chown=${APP_USER}:${APP_GROUP} . .
+
+# Create necessary directories
+RUN mkdir -p ${APP_HOME}/logs ${APP_HOME}/uploads ${APP_HOME}/cache ${APP_HOME}/keys && \
+    chown -R ${APP_USER}:${APP_GROUP} ${APP_HOME}
+
+# Switch to non-root user
+USER ${APP_USER}
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command - run with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+# -----------------------------------------------------------------------------
+# Stage 3: Development - Development image with hot reload
+# -----------------------------------------------------------------------------
+FROM runtime as development
+
+# Switch to root temporarily for installations
+USER root
+
+# Install development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install development Python packages
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    pytest-cov \
+    black \
+    flake8 \
+    mypy \
+    ipython
+
+# Switch back to app user
+USER ${APP_USER}
+
+# Development command with hot reload
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# -----------------------------------------------------------------------------
+# Stage 4: Testing - Image for running tests
+# -----------------------------------------------------------------------------
+FROM development as testing
+
+# Switch to root for test setup
+USER root
+
+# Install test dependencies
+RUN pip install --no-cache-dir \
+    pytest-xdist \
+    pytest-mock \
+    factory-boy \
+    faker \
+    coverage
+
+# Switch back to app user
+USER ${APP_USER}
+
+# Run tests by default
+CMD ["pytest", "-v", "--cov=.", "--cov-report=term-missing", "--cov-report=xml"]

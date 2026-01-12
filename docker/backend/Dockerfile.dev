@@ -1,0 +1,96 @@
+# =============================================================================
+# TASTEFULLY STAINED - BACKEND DEVELOPMENT DOCKERFILE
+# =============================================================================
+# Development-optimized Docker build with hot reloading
+# Port: 17700 (host) -> 8000 (container)
+#
+# Copyright (c) 2025 Tastefully Stained. All Rights Reserved.
+# =============================================================================
+
+FROM python:3.12-slim-bookworm
+
+# Labels
+LABEL maintainer="Tastefully Stained <admin@tastefullystained.com>" \
+    version="0.1.0-dev" \
+    description="Tastefully Stained Backend - Development"
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Development mode
+    APP_ENV=development \
+    DEBUG=true \
+    # Uvicorn hot reload
+    UVICORN_RELOAD=true \
+    UVICORN_RELOAD_DIR=/app/src
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    libffi-dev \
+    libpq-dev \
+    libssl-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libopencv-dev \
+    pkg-config \
+    git \
+    curl \
+    vim \
+    htop \
+    # Development tools
+    inotify-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user (optional for dev, but good practice)
+RUN groupadd --gid 1000 appgroup \
+    && useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+
+# Set working directory
+WORKDIR /app
+
+# Upgrade pip
+RUN pip install --upgrade pip wheel setuptools
+
+# Copy only requirements first for caching
+COPY requirements.txt /app/requirements.txt
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional dev dependencies
+RUN pip install --no-cache-dir \
+    debugpy \
+    watchfiles \
+    ipython \
+    ipdb
+
+# Create directories
+RUN mkdir -p /app/data /app/logs /app/temp /app/uploads \
+    && chown -R appuser:appgroup /app
+
+# The source code will be mounted as a volume
+# No COPY of source code - allows hot reloading
+
+# Expose ports
+EXPOSE 8000
+# Debug port
+EXPOSE 5678
+
+# Switch to non-root user
+USER appuser
+
+# Development command with hot reload
+CMD ["uvicorn", "src.main:app", \
+    "--host", "0.0.0.0", \
+    "--port", "8000", \
+    "--reload", \
+    "--reload-dir", "/app/src", \
+    "--log-level", "debug"]
