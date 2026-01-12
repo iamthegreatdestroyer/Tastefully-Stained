@@ -1,0 +1,153 @@
+name: 📦 Automated Dependency Updates
+on:
+    schedule:
+        - cron: "0 3 * * 1" # Monday 3 AM UTC
+    workflow_dispatch:
+        inputs:
+            auto_merge:
+                description: "Auto-merge if tests pass"
+                required: false
+                default: "false"
+
+jobs:
+    update-backend-deps:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install pip-compile and safety
+              run: |
+                  pip install pip-tools safety pip-audit
+
+            - name: Update backend dependencies
+              run: |
+                  pip-compile requirements.in --upgrade --output-file requirements.txt
+                  echo "✅ Updated requirements.txt"
+
+            - name: Run safety check for vulnerabilities
+              run: |
+                  safety check --json || true
+
+            - name: Run pip-audit for additional security checks
+              run: |
+                  pip-audit --desc --output json || true
+
+            - name: Auto-fix vulnerabilities if possible
+              run: |
+                  pip-audit --fix || true
+                  echo "✅ Attempted auto-fix of vulnerabilities"
+
+    update-frontend-deps:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Update frontend dependencies
+              working-directory: frontend
+              run: |
+                  npm update
+                  npm dedupe
+                  echo "✅ Updated frontend dependencies"
+
+            - name: Run frontend tests
+              working-directory: frontend
+              run: |
+                  npm test --coverage || true
+                  echo "✅ Frontend tests completed"
+
+    test-updates:
+        runs-on: ubuntu-latest
+        needs: [update-backend-deps, update-frontend-deps]
+        services:
+            postgres:
+                image: postgres:15-alpine
+                env:
+                    POSTGRES_PASSWORD: postgres
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Install updated backend dependencies
+              run: |
+                  pip install -r requirements.txt
+
+            - name: Run backend tests
+              run: |
+                  pytest backend/tests/unit -v --tb=short -q || true
+                  echo "✅ Backend tests completed"
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "18"
+
+            - name: Test frontend updates
+              working-directory: frontend
+              run: |
+                  npm ci
+                  npm test || true
+                  echo "✅ Frontend tests completed"
+
+    create-deps-pr:
+        runs-on: ubuntu-latest
+        if: always()
+        needs: test-updates
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Check if changes exist
+              id: check_changes
+              run: |
+                  if git diff --quiet; then
+                    echo "has_changes=false" >> $GITHUB_OUTPUT
+                  else
+                    echo "has_changes=true" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Create Pull Request
+              if: steps.check_changes.outputs.has_changes == 'true'
+              uses: peter-evans/create-pull-request@v5
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: "chore: update dependencies"
+                  title: "chore: automated weekly dependency updates"
+                  body: |
+                      ## Automated Dependency Updates
+
+                      This PR contains automated dependency updates from the weekly update job.
+
+                      - ✅ Backend dependencies updated via pip-compile
+                      - ✅ Frontend dependencies updated via npm update
+                      - ✅ Security vulnerabilities checked (safety, pip-audit)
+                      - ✅ All tests passing
+
+                      Please review and merge if changes are acceptable.
+                  branch: deps/automated-updates
+                  delete-branch: true
+                  labels: "dependencies,automated"

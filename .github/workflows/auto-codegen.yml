@@ -1,0 +1,93 @@
+name: 🔧 Automated Code Generation
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, labeled]
+        paths:
+            - "schemas/**"
+            - ".github/workflows/auto-codegen.yml"
+
+jobs:
+    generate-types:
+        if: contains(github.event.pull_request.labels.*.name, 'codegen')
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.head_ref }}
+                  fetch-depth: 0
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "18"
+
+            - name: Install Python dependencies
+              run: |
+                  pip install datamodel-code-generator pydantic
+                  pip install -q --no-input -r requirements.txt 2>/dev/null || true
+
+            - name: Generate Python types from OpenAPI schema
+              run: |
+                  if [ -f "schemas/openapi.json" ]; then
+                    datamodel-code-generator \
+                      --input schemas/openapi.json \
+                      --output backend/generated/models.py \
+                      --target-python-version 3.11
+                    echo "✅ Python models generated"
+                  fi
+              shell: bash
+
+            - name: Install Node.js dependencies
+              run: cd frontend && npm ci --silent || true
+
+            - name: Install OpenAPI Generator CLI
+              run: |
+                  npm install -g @openapitools/openapi-generator-cli@latest
+
+            - name: Generate TypeScript types from OpenAPI schema
+              run: |
+                  if [ -f "schemas/openapi.json" ]; then
+                    mkdir -p frontend/src/generated
+                    openapi-generator-cli generate \
+                      -i schemas/openapi.json \
+                      -g typescript-fetch \
+                      -o frontend/src/generated \
+                      --package-name api \
+                      --additional-properties=supportsES6=true
+                    echo "✅ TypeScript types generated"
+                  fi
+              shell: bash
+
+            - name: Format Python types
+              run: |
+                  pip install black -q
+                  if [ -f "backend/generated/models.py" ]; then
+                    black backend/generated/models.py
+                  fi
+              shell: bash
+
+            - name: Format TypeScript types
+              run: |
+                  cd frontend
+                  npm run format 2>/dev/null || npx prettier --write src/generated || true
+              shell: bash
+
+            - name: Commit generated types
+              if: always()
+              uses: EndBug/add-and-commit@v9
+              with:
+                  author_name: "github-actions[bot]"
+                  author_email: "41898282+github-actions[bot]@users.noreply.github.com"
+                  message: "ci: auto-generate types from OpenAPI schema"
+                  add: |
+                      backend/generated/
+                      frontend/src/generated/
+                  commit: "--no-verify"
+                  default_author: github_actions
+                  push: true
+                  pull: "--rebase --autostash"
