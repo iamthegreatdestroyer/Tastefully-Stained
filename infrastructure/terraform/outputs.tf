@@ -19,6 +19,41 @@ output "public_subnet_ids" {
   value       = module.vpc.public_subnet_ids
 }
 
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = module.vpc.vpc_cidr_block
+}
+
+output "vpc_arn" {
+  description = "ARN of the VPC"
+  value       = module.vpc.vpc_arn
+}
+
+output "application_security_group_id" {
+  description = "ID of application tier security group (EKS nodes)"
+  value       = module.vpc.application_security_group_id
+}
+
+output "database_security_group_id" {
+  description = "ID of database tier security group (RDS)"
+  value       = module.vpc.database_security_group_id
+}
+
+output "cache_security_group_id" {
+  description = "ID of cache tier security group (ElastiCache)"
+  value       = module.vpc.cache_security_group_id
+}
+
+output "nat_gateway_public_ips" {
+  description = "Public IPs of NAT Gateways (for whitelisting external services)"
+  value       = module.vpc.nat_gateway_public_ips
+}
+
+output "vpc_summary" {
+  description = "Summary of VPC configuration"
+  value       = module.vpc.vpc_summary
+}
+
 # EKS Outputs
 output "eks_cluster_id" {
   description = "EKS cluster ID"

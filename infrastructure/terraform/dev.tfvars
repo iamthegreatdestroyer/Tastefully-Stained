@@ -9,7 +9,13 @@ project_name = "tastefully-stained"
 team_name = "platform-engineering"
 
 # VPC Configuration
-vpc_cidr = "10.0.0.0/16"
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# Cost Optimization for Development
+enable_nat_gateway = false  # Save ~$96/month (3 NAT gateways * $32/month)
+enable_flow_logs   = false  # Save ~$10/month CloudWatch Logs costs
+# Note: Without NAT Gateway, private subnet resources cannot access internet
 
 # EKS Configuration - Minimal for dev
 kubernetes_version = "1.27"

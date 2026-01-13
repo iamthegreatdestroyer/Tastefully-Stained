@@ -52,15 +52,25 @@ provider "kubernetes" {
   }
 }
 
+# =============================================================================
 # VPC and Networking
+# =============================================================================
+
 module "vpc" {
-  source = "./modules/vpc"
+  source = "../modules/vpc"
   
-  project_name           = var.project_name
-  environment            = var.environment
-  cidr_block            = var.vpc_cidr
-  availability_zones    = data.aws_availability_zones.available.names
+  # Core VPC Configuration
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_cidr          = var.vpc_cidr
+  availability_zones = var.availability_zones
   
+  # Optional Features (cost optimization control)
+  enable_nat_gateway        = var.enable_nat_gateway
+  enable_flow_logs          = var.enable_flow_logs
+  flow_logs_retention_days  = var.flow_logs_retention_days
+  
+  # Tagging
   tags = local.common_tags
 }
 

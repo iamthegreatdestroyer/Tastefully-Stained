@@ -60,6 +60,39 @@ variable "vpc_cidr" {
   }
 }
 
+variable "availability_zones" {
+  description = "List of availability zones for multi-AZ deployment (minimum 2 required for high availability)"
+  type        = list(string)
+  
+  validation {
+    condition     = length(var.availability_zones) >= 2
+    error_message = "At least 2 availability zones required for high availability."
+  }
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway for private subnet egress (disable in dev for cost savings ~$96/month)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_flow_logs" {
+  description = "Enable VPC Flow Logs for network traffic analysis and compliance"
+  type        = bool
+  default     = true
+}
+
+variable "flow_logs_retention_days" {
+  description = "Number of days to retain VPC Flow Logs in CloudWatch Logs"
+  type        = number
+  default     = 30
+  
+  validation {
+    condition = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653], var.flow_logs_retention_days)
+    error_message = "Flow logs retention days must be a valid CloudWatch Logs retention period: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, or 3653 days."
+  }
+}
+
 # EKS Configuration
 variable "kubernetes_version" {
   description = "Kubernetes version for EKS cluster"
