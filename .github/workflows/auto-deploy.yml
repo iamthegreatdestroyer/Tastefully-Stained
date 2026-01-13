@@ -1,204 +1,204 @@
 name: 🚀 Automated Deployment Pipeline
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/auto-deploy.yml'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Deployment environment'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
-      dry_run:
-        description: 'Dry run (no actual deployment)'
-        required: false
-        type: boolean
-        default: false
+    push:
+        branches: [main]
+        paths:
+            - "backend/**"
+            - "frontend/**"
+            - ".github/workflows/auto-deploy.yml"
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: "Deployment environment"
+                required: true
+                default: "staging"
+                type: choice
+                options:
+                    - staging
+                    - production
+            dry_run:
+                description: "Dry run (no actual deployment)"
+                required: false
+                type: boolean
+                default: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  deploy-staging:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: staging
-    permissions:
-      contents: read
-      packages: read
+    deploy-staging:
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        environment: staging
+        permissions:
+            contents: read
+            packages: read
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Prepare deployment variables
-        id: vars
-        run: |
-          echo "image_tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "environment=staging" >> $GITHUB_OUTPUT
-          echo "deployment_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+            - name: Prepare deployment variables
+              id: vars
+              run: |
+                  echo "image_tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+                  echo "environment=staging" >> $GITHUB_OUTPUT
+                  echo "deployment_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
-      - name: Create deployment status
-        uses: deploymentsdotcom/create-deployment-status@v12
-        with:
-          auto_merge: false
-          environment: staging
-          state: in_progress
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment_url: https://staging.example.com
-          description: 'Deployment to staging started'
+            - name: Create deployment status
+              uses: deploymentsdotcom/create-deployment-status@v12
+              with:
+                  auto_merge: false
+                  environment: staging
+                  state: in_progress
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  environment_url: https://staging.example.com
+                  description: "Deployment to staging started"
 
-      - name: Generate deployment summary
-        run: |
-          echo "## 🚀 Staging Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: staging" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Tag**: ${{ steps.vars.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Deployment Date**: ${{ steps.vars.outputs.deployment_date }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status**: ✅ Deployment initiated" >> $GITHUB_STEP_SUMMARY
+            - name: Generate deployment summary
+              run: |
+                  echo "## 🚀 Staging Deployment" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Environment**: staging" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Image Tag**: ${{ steps.vars.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Deployment Date**: ${{ steps.vars.outputs.deployment_date }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Status**: ✅ Deployment initiated" >> $GITHUB_STEP_SUMMARY
 
-      - name: Update deployment status (success)
-        uses: deploymentsdotcom/create-deployment-status@v12
-        if: success()
-        with:
-          auto_merge: false
-          environment: staging
-          state: success
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment_url: https://staging.example.com
-          description: 'Successfully deployed to staging'
+            - name: Update deployment status (success)
+              uses: deploymentsdotcom/create-deployment-status@v12
+              if: success()
+              with:
+                  auto_merge: false
+                  environment: staging
+                  state: success
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  environment_url: https://staging.example.com
+                  description: "Successfully deployed to staging"
 
-      - name: Update deployment status (failure)
-        uses: deploymentsdotcom/create-deployment-status@v12
-        if: failure()
-        with:
-          auto_merge: false
-          environment: staging
-          state: failure
-          token: ${{ secrets.GITHUB_TOKEN }}
-          description: 'Deployment to staging failed'
+            - name: Update deployment status (failure)
+              uses: deploymentsdotcom/create-deployment-status@v12
+              if: failure()
+              with:
+                  auto_merge: false
+                  environment: staging
+                  state: failure
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  description: "Deployment to staging failed"
 
-  deploy-manual:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    permissions:
-      contents: read
-      packages: read
+    deploy-manual:
+        if: github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        permissions:
+            contents: read
+            packages: read
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Prepare deployment variables
-        id: vars
-        run: |
-          echo "image_tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
-          echo "deployment_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
-          if [ "${{ inputs.dry_run }}" == "true" ]; then
-            echo "dry_run=true" >> $GITHUB_OUTPUT
-          else
-            echo "dry_run=false" >> $GITHUB_OUTPUT
-          fi
+            - name: Prepare deployment variables
+              id: vars
+              run: |
+                  echo "image_tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+                  echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+                  echo "deployment_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+                  if [ "${{ inputs.dry_run }}" == "true" ]; then
+                    echo "dry_run=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "dry_run=false" >> $GITHUB_OUTPUT
+                  fi
 
-      - name: 🔍 Validate deployment configuration
-        run: |
-          echo "Validating deployment for ${{ steps.vars.outputs.environment }}..."
-          if [ "${{ steps.vars.outputs.dry_run }}" == "true" ]; then
-            echo "ℹ️ DRY RUN MODE - No actual changes will be made"
-          fi
+            - name: 🔍 Validate deployment configuration
+              run: |
+                  echo "Validating deployment for ${{ steps.vars.outputs.environment }}..."
+                  if [ "${{ steps.vars.outputs.dry_run }}" == "true" ]; then
+                    echo "ℹ️ DRY RUN MODE - No actual changes will be made"
+                  fi
 
-      - name: Create deployment status
-        uses: deploymentsdotcom/create-deployment-status@v12
-        with:
-          auto_merge: false
-          environment: ${{ steps.vars.outputs.environment }}
-          state: in_progress
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment_url: https://${{ steps.vars.outputs.environment }}.example.com
-          description: 'Manual deployment to ${{ steps.vars.outputs.environment }} started'
+            - name: Create deployment status
+              uses: deploymentsdotcom/create-deployment-status@v12
+              with:
+                  auto_merge: false
+                  environment: ${{ steps.vars.outputs.environment }}
+                  state: in_progress
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  environment_url: https://${{ steps.vars.outputs.environment }}.example.com
+                  description: "Manual deployment to ${{ steps.vars.outputs.environment }} started"
 
-      - name: Generate deployment summary
-        run: |
-          echo "## 🚀 Manual Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ steps.vars.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Tag**: ${{ steps.vars.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Deployment Date**: ${{ steps.vars.outputs.deployment_date }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dry Run**: ${{ steps.vars.outputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.vars.outputs.dry_run }}" == "true" ]; then
-            echo "**Status**: 🔍 Dry run mode (no changes)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Status**: ✅ Deployment initiated" >> $GITHUB_STEP_SUMMARY
-          fi
+            - name: Generate deployment summary
+              run: |
+                  echo "## 🚀 Manual Deployment" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Environment**: ${{ steps.vars.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Image Tag**: ${{ steps.vars.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Deployment Date**: ${{ steps.vars.outputs.deployment_date }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Dry Run**: ${{ steps.vars.outputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+                  echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  if [ "${{ steps.vars.outputs.dry_run }}" == "true" ]; then
+                    echo "**Status**: 🔍 Dry run mode (no changes)" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "**Status**: ✅ Deployment initiated" >> $GITHUB_STEP_SUMMARY
+                  fi
 
-      - name: Update deployment status (success)
-        uses: deploymentsdotcom/create-deployment-status@v12
-        if: success()
-        with:
-          auto_merge: false
-          environment: ${{ steps.vars.outputs.environment }}
-          state: success
-          token: ${{ secrets.GITHUB_TOKEN }}
-          environment_url: https://${{ steps.vars.outputs.environment }}.example.com
-          description: 'Successfully deployed to ${{ steps.vars.outputs.environment }}'
+            - name: Update deployment status (success)
+              uses: deploymentsdotcom/create-deployment-status@v12
+              if: success()
+              with:
+                  auto_merge: false
+                  environment: ${{ steps.vars.outputs.environment }}
+                  state: success
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  environment_url: https://${{ steps.vars.outputs.environment }}.example.com
+                  description: "Successfully deployed to ${{ steps.vars.outputs.environment }}"
 
-      - name: Update deployment status (failure)
-        uses: deploymentsdotcom/create-deployment-status@v12
-        if: failure()
-        with:
-          auto_merge: false
-          environment: ${{ steps.vars.outputs.environment }}
-          state: failure
-          token: ${{ secrets.GITHUB_TOKEN }}
-          description: 'Deployment to ${{ steps.vars.outputs.environment }} failed'
+            - name: Update deployment status (failure)
+              uses: deploymentsdotcom/create-deployment-status@v12
+              if: failure()
+              with:
+                  auto_merge: false
+                  environment: ${{ steps.vars.outputs.environment }}
+                  state: failure
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  description: "Deployment to ${{ steps.vars.outputs.environment }} failed"
 
-  create-release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    create-release:
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
 
-    steps:
-      - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
-            ## Release ${{ github.ref_name }}
-            
-            ✅ **Automated Deployment Pipeline**
-            
-            **Deployment Status**:
-            - Staging: Ready for deployment
-            - Production: Available via manual workflow dispatch
-            
-            **Container Images**:
-            - Backend: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ github.ref_name }}`
-            - Frontend: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ github.ref_name }}`
-            
-            **Commit**: ${{ github.sha }}
-            
-            To deploy to production, use the workflow dispatch action with:
-            - Environment: production
-            - Image Tag: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  body: |
+                      ## Release ${{ github.ref_name }}
+
+                      ✅ **Automated Deployment Pipeline**
+
+                      **Deployment Status**:
+                      - Staging: Ready for deployment
+                      - Production: Available via manual workflow dispatch
+
+                      **Container Images**:
+                      - Backend: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ github.ref_name }}`
+                      - Frontend: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ github.ref_name }}`
+
+                      **Commit**: ${{ github.sha }}
+
+                      To deploy to production, use the workflow dispatch action with:
+                      - Environment: production
+                      - Image Tag: ${{ github.ref_name }}
+                  draft: false
+                  prerelease: false
+                  generate_release_notes: true

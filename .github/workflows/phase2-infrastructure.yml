@@ -1,0 +1,246 @@
+name: 🏗️ Phase 2 Infrastructure Deployment
+on:
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: "Target environment"
+                required: true
+                default: "staging"
+                type: choice
+                options:
+                    - dev
+                    - staging
+                    - prod
+            auto_approve:
+                description: "Auto-approve Terraform changes"
+                required: false
+                type: boolean
+                default: false
+
+env:
+    TERRAFORM_VERSION: 1.5.0
+    AWS_REGION: us-east-1
+
+jobs:
+    terraform-plan:
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+
+            - name: Set up Terraform
+              uses: hashicorp/setup-terraform@v2
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+            - name: Terraform Init
+              working-directory: infrastructure/terraform
+              run: terraform init -upgrade
+
+            - name: Terraform Format Check
+              working-directory: infrastructure/terraform
+              run: terraform fmt -check -recursive
+
+            - name: Terraform Validate
+              working-directory: infrastructure/terraform
+              run: terraform validate
+
+            - name: Terraform Plan
+              id: plan
+              working-directory: infrastructure/terraform
+              run: |
+                  terraform plan \
+                    -var-file="${{ inputs.environment }}.tfvars" \
+                    -out=tfplan \
+                    -no-color \
+                    -lock=true
+
+            - name: Comment PR with Plan
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v6
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const plan = fs.readFileSync('infrastructure/terraform/tfplan', 'utf8');
+                      github.rest.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: `## Terraform Plan for ${{ inputs.environment }}\n\n\`\`\`\n${plan}\n\`\`\``
+                      });
+
+            - name: Upload Terraform Plan
+              uses: actions/upload-artifact@v3
+              with:
+                  name: terraform-plan-${{ inputs.environment }}
+                  path: infrastructure/terraform/tfplan
+                  retention-days: 5
+
+    terraform-apply:
+        needs: terraform-plan
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        permissions:
+            contents: read
+            id-token: write
+
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+
+            - name: Set up Terraform
+              uses: hashicorp/setup-terraform@v2
+              with:
+                  terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+            - name: Download Terraform Plan
+              uses: actions/download-artifact@v3
+              with:
+                  name: terraform-plan-${{ inputs.environment }}
+                  path: infrastructure/terraform/
+
+            - name: Terraform Init
+              working-directory: infrastructure/terraform
+              run: terraform init -upgrade
+
+            - name: Terraform Apply
+              working-directory: infrastructure/terraform
+              run: |
+                  if [ "${{ inputs.auto_approve }}" == "true" ]; then
+                    terraform apply -auto-approve tfplan
+                  else
+                    echo "Waiting for manual approval..."
+                    terraform apply tfplan
+                  fi
+
+            - name: Export Infrastructure Outputs
+              working-directory: infrastructure/terraform
+              run: |
+                  terraform output -json > infrastructure-outputs.json
+
+            - name: Upload Infrastructure Outputs
+              uses: actions/upload-artifact@v3
+              with:
+                  name: infrastructure-outputs-${{ inputs.environment }}
+                  path: infrastructure/terraform/infrastructure-outputs.json
+                  retention-days: 30
+
+    kubernetes-deploy:
+        needs: terraform-apply
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+        permissions:
+            contents: read
+            id-token: write
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+                  aws-region: ${{ env.AWS_REGION }}
+
+            - name: Set up kubectl
+              uses: azure/setup-kubectl@v3
+
+            - name: Update kubeconfig
+              run: |
+                  aws eks update-kubeconfig \
+                    --region ${{ env.AWS_REGION }} \
+                    --name tastefully-stained-${{ inputs.environment }}
+
+            - name: Apply Kubernetes Manifests
+              run: |
+                  kubectl apply -f infrastructure/kubernetes/namespace-setup.yaml
+                  kubectl apply -f infrastructure/kubernetes/configmaps-secrets.yaml
+                  kubectl apply -f infrastructure/kubernetes/api-deployment.yaml
+                  kubectl apply -f infrastructure/kubernetes/ingress-tls.yaml
+
+            - name: Wait for Deployments
+              run: |
+                  kubectl rollout status deployment/tastefully-stained-api \
+                    -n tastefully-stained \
+                    --timeout=5m
+
+            - name: Verify Cluster Health
+              run: |
+                  echo "Pod Status:"
+                  kubectl get pods -n tastefully-stained
+                  echo ""
+                  echo "Service Status:"
+                  kubectl get svc -n tastefully-stained
+                  echo ""
+                  echo "Ingress Status:"
+                  kubectl get ingress -n tastefully-stained
+
+    post-deployment-validation:
+        needs: kubernetes-deploy
+        runs-on: ubuntu-latest
+        environment: ${{ inputs.environment }}
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Install test dependencies
+              run: |
+                  pip install requests pytest pytest-asyncio
+
+            - name: Run smoke tests
+              run: |
+                  pytest infrastructure/tests/smoke/ -v --tb=short
+
+            - name: Verify Infrastructure
+              run: |
+                  python infrastructure/scripts/verify_deployment.py ${{ inputs.environment }}
+
+            - name: Generate Report
+              run: |
+                  python infrastructure/scripts/generate_deployment_report.py \
+                    --environment ${{ inputs.environment }} \
+                    --output deployment-report.md
+
+            - name: Upload Report
+              uses: actions/upload-artifact@v3
+              with:
+                  name: deployment-report-${{ inputs.environment }}
+                  path: deployment-report.md
+                  retention-days: 30
+
+            - name: Create Deployment Issue
+              uses: actions/github-script@v6
+              if: success()
+              with:
+                  script: |
+                      github.rest.issues.create({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        title: `✅ Phase 2 Infrastructure Deployment - ${{ inputs.environment }}`,
+                        body: `## Deployment Complete\n\nEnvironment: ${{ inputs.environment }}\nCommit: ${context.sha}\n\nAll infrastructure deployed and validated successfully.`,
+                        labels: ['deployment', 'phase-2', 'infrastructure']
+                      });

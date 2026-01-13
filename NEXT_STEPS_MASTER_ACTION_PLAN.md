@@ -1,4 +1,5 @@
 # NEXT STEPS: Master Action Plan for Autonomous Development
+
 ## Tastefully Stained - AI Content Provenance & Watermarking Service
 
 **Date:** January 12, 2026  
@@ -13,6 +14,7 @@
 This plan establishes a **fully autonomous, self-managing development pipeline** that leverages GitHub Actions, AI agent automation, and Infrastructure as Code to accelerate the Tastefully Stained project from development to production.
 
 **Key Principles:**
+
 - ✅ 100% Infrastructure as Code (IaC)
 - ✅ Continuous Integration & Deployment (CI/CD) automation
 - ✅ Self-healing systems with automated recovery
@@ -27,6 +29,7 @@ This plan establishes a **fully autonomous, self-managing development pipeline**
 ### 1.1 GitHub Actions Workflow Automation
 
 #### Task 1.1.1: Implement Intelligent Test Automation
+
 **Autonomy Level:** 95%
 
 **Deliverable:** `.github/workflows/auto-test-suite.yml`
@@ -37,14 +40,14 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'requirements.txt'
-      - 'package.json'
+      - "backend/**"
+      - "frontend/**"
+      - "requirements.txt"
+      - "package.json"
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * *'  # Nightly tests
+    - cron: "0 2 * * *" # Nightly tests
 
 jobs:
   test-backend:
@@ -75,8 +78,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -132,8 +135,8 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
         run: cd frontend && npm ci
@@ -155,15 +158,15 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Check for critical vulnerabilities
         run: |
@@ -180,7 +183,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -204,6 +207,7 @@ jobs:
 ```
 
 **Status Tracking:**
+
 - [ ] Workflow file created
 - [ ] Database services configured
 - [ ] Test parallelization enabled
@@ -213,6 +217,7 @@ jobs:
 ---
 
 #### Task 1.1.2: Implement Automated Code Generation & Refactoring
+
 **Autonomy Level:** 85%
 
 **Deliverable:** `.github/workflows/auto-codegen.yml`
@@ -223,14 +228,14 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - 'backend/watermark_engine/api/schemas/**'
-      - 'contracts/**'
+      - "backend/watermark_engine/api/schemas/**"
+      - "contracts/**"
 
 jobs:
   generate-types:
     runs-on: ubuntu-latest
     if: contains(github.event.pull_request.labels.*.name, 'codegen')
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -239,7 +244,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Generate API types from Pydantic schemas
         run: |
@@ -279,6 +284,7 @@ jobs:
 ---
 
 #### Task 1.1.3: Implement Automated Dependency Updates
+
 **Autonomy Level:** 90%
 
 **Deliverable:** `.github/workflows/auto-deps.yml`
@@ -287,7 +293,7 @@ jobs:
 name: 🔄 Automated Dependency Updates
 on:
   schedule:
-    - cron: '0 3 * * 1'  # Weekly on Monday
+    - cron: "0 3 * * 1" # Weekly on Monday
   workflow_dispatch:
 
 jobs:
@@ -301,7 +307,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Update pip and tools
         run: pip install --upgrade pip pip-tools
@@ -321,17 +327,17 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
-          commit-message: 'chore(deps): update Python dependencies'
-          title: 'chore(deps): update Python dependencies'
+          commit-message: "chore(deps): update Python dependencies"
+          title: "chore(deps): update Python dependencies"
           body: |
             ## Automated Dependency Update
-            
+
             This PR updates Python dependencies to their latest versions.
-            
+
             - ✅ All tests passing
             - ✅ Security checks completed
             - ✅ No breaking changes detected
-            
+
             Please review before merging.
           labels: dependencies, automated
           branch: deps/update-python
@@ -346,7 +352,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Update npm packages
         run: cd frontend && npm update
@@ -357,8 +363,8 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v5
         with:
-          commit-message: 'chore(deps): update npm dependencies'
-          title: 'chore(deps): update npm dependencies'
+          commit-message: "chore(deps): update npm dependencies"
+          title: "chore(deps): update npm dependencies"
           labels: dependencies, automated
           branch: deps/update-npm
 ```
@@ -368,6 +374,7 @@ jobs:
 ### 1.2 Automated Build & Container Registry
 
 #### Task 1.2.1: Multi-Platform Container Builds
+
 **Autonomy Level:** 95%
 
 **Deliverable:** `.github/workflows/auto-build-containers.yml`
@@ -377,7 +384,7 @@ name: 🐳 Build & Push Containers
 on:
   push:
     branches: [main, develop]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -475,6 +482,7 @@ jobs:
 ### 1.3 Automated Deployment Pipeline
 
 #### Task 1.3.1: Kubernetes Deployment Automation
+
 **Autonomy Level:** 90%
 
 **Deliverable:** `.github/workflows/auto-deploy.yml`
@@ -484,13 +492,13 @@ name: 🚀 Automated Deployment
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: "Environment to deploy to"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
           - staging
@@ -511,14 +519,14 @@ jobs:
       - name: Configure kubectl
         uses: azure/setup-kubectl@v3
         with:
-          version: 'latest'
+          version: "latest"
 
       - name: Authenticate to Kubernetes
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
           cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
-          admin: 'false'
+          admin: "false"
 
       - name: Create image pull secrets
         run: |
@@ -570,6 +578,7 @@ jobs:
 ### 2.1 Infrastructure Provisioning
 
 #### Task 2.1.1: Terraform Automation
+
 **Autonomy Level:** 95%
 
 **Deliverable:** `infrastructure/terraform/main.tf`
@@ -755,6 +764,7 @@ output "redis_endpoint" {
 ---
 
 #### Task 2.1.2: Automated Database Migrations
+
 **Autonomy Level:** 90%
 
 **Deliverable:** `.github/workflows/auto-db-migrate.yml`
@@ -765,7 +775,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'backend/watermark_engine/db/migrations/**'
+      - "backend/watermark_engine/db/migrations/**"
   workflow_dispatch:
 
 jobs:
@@ -779,7 +789,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Alembic
         run: pip install alembic sqlalchemy psycopg2-binary
@@ -816,6 +826,7 @@ jobs:
 ### 3.1 Observability & Alerting
 
 #### Task 3.1.1: Prometheus & Grafana Setup
+
 **Autonomy Level:** 95%
 
 **Deliverable:** `infrastructure/monitoring/values-prometheus.yaml`
@@ -825,23 +836,23 @@ prometheus:
   prometheusSpec:
     retention: 30d
     retention_size: "50GB"
-    
+
     remoteWrite:
       - url: https://prometheus-remote-write.example.com/api/v1/write
         writeRelabelConfigs:
           - source_labels: [__name__]
-            regex: 'container_.*'
+            regex: "container_.*"
             action: drop
 
     scrapeConfigs:
-      - job_name: 'kubernetes-apiservers'
+      - job_name: "kubernetes-apiservers"
         kubernetes_sd_configs:
           - role: endpoints
         scheme: https
         tls_config:
           ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
-      - job_name: 'kubernetes-nodes'
+      - job_name: "kubernetes-nodes"
         kubernetes_sd_configs:
           - role: node
         scheme: https
@@ -850,7 +861,7 @@ prometheus:
 
 grafana:
   adminPassword: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-  
+
   persistence:
     enabled: true
     size: 10Gi
@@ -869,6 +880,7 @@ grafana:
 ---
 
 #### Task 3.1.2: Automated Alert Rules
+
 **Autonomy Level:** 90%
 
 **Deliverable:** `infrastructure/monitoring/alert-rules.yaml`
@@ -936,6 +948,7 @@ spec:
 ### 3.2 Self-Healing Workflows
 
 #### Task 3.2.1: Automated Recovery Procedures
+
 **Autonomy Level:** 85%
 
 **Deliverable:** `.github/workflows/auto-heal.yml`
@@ -944,7 +957,7 @@ spec:
 name: 🏥 Automated Health & Recovery
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes
+    - cron: "*/5 * * * *" # Every 5 minutes
   workflow_dispatch:
 
 jobs:
@@ -962,7 +975,7 @@ jobs:
             -o jsonpath='{.status.readyReplicas}')
           DESIRED_REPLICAS=$(kubectl get deployment tastefully-stained \
             -o jsonpath='{.spec.replicas}')
-          
+
           if [ "$READY_REPLICAS" -ne "$DESIRED_REPLICAS" ]; then
             echo "status=unhealthy" >> $GITHUB_OUTPUT
             echo "ready=$READY_REPLICAS" >> $GITHUB_OUTPUT
@@ -999,11 +1012,11 @@ jobs:
           title: "🚨 Automated Recovery Failed"
           body: |
             Automated health check and recovery failed at ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
+
             **Status:**
             - Ready replicas: ${{ steps.health.outputs.ready }}
             - Desired replicas: ${{ steps.health.outputs.desired }}
-            
+
             **Action Required:** Manual investigation needed
           labels: incident, automated-recovery-failed
 ```
@@ -1015,6 +1028,7 @@ jobs:
 ### 4.1 Automated Documentation
 
 #### Task 4.1.1: Self-Documenting Code Generation
+
 **Autonomy Level:** 90%
 
 **Deliverable:** `.github/workflows/auto-docs.yml`
@@ -1025,9 +1039,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '*.md'
+      - "backend/**"
+      - "frontend/**"
+      - "*.md"
   workflow_dispatch:
 
 jobs:
@@ -1092,17 +1106,18 @@ jobs:
 ### 4.2 Automated Code Quality
 
 #### Task 4.2.1: Continuous Refactoring
+
 **Autonomy Level:** 80%
 
 **Deliverable:** `.github/workflows/auto-refactor.yml`
 
-```yaml
+````yaml
 name: ♻️ Automated Code Refactoring
 on:
   push:
     branches: [develop]
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    - cron: "0 0 * * 0" # Weekly on Sunday
 
 jobs:
   refactor:
@@ -1119,7 +1134,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install tools
         run: |
@@ -1143,31 +1158,31 @@ jobs:
       - name: Create refactoring PR
         uses: peter-evans/create-pull-request@v5
         with:
-          commit-message: 'refactor: auto-refactoring and code quality improvements'
-          title: 'refactor: auto-refactoring and code quality improvements'
+          commit-message: "refactor: auto-refactoring and code quality improvements"
+          title: "refactor: auto-refactoring and code quality improvements"
           body: |
             ## Automated Code Refactoring Report
-            
+
             ### Formatting
             - ✅ Applied Black formatter
             - ✅ Sorted imports with isort
-            
+
             ### Analysis
-            
+
             #### Dead Code
             ```
             ${{ readFile('dead_code_report.txt') }}
             ```
-            
+
             #### Complexity
             ```
             ${{ readFile('complexity_report.txt') }}
             ```
-            
+
             Please review changes for any unexpected modifications.
           labels: refactoring, automated, code-quality
           branch: refactor/auto-improvements
-```
+````
 
 ---
 
@@ -1176,6 +1191,7 @@ jobs:
 ### 5.1 Automated Performance Testing
 
 #### Task 5.1.1: Continuous Performance Benchmarking
+
 **Autonomy Level:** 85%
 
 **Deliverable:** `.github/workflows/auto-performance.yml`
@@ -1186,7 +1202,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 1 * * *'  # Nightly
+    - cron: "0 1 * * *" # Nightly
 
 jobs:
   performance-tests:
@@ -1200,7 +1216,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -1258,6 +1274,7 @@ jobs:
 ### 6.1 Release Automation
 
 #### Task 6.1.1: Automated Release Pipeline
+
 **Autonomy Level:** 95%
 
 **Deliverable:** `.github/workflows/auto-release.yml`
@@ -1268,7 +1285,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version'
+        description: "Release version"
         required: true
         type: choice
         options:
@@ -1292,11 +1309,11 @@ jobs:
       - name: Set up Python & Node
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Bump version
         id: version
@@ -1356,46 +1373,51 @@ jobs:
 
 ### Automation Goals
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| Test Execution Time | < 5 min | TBD | ⏳ |
-| Build-to-Deploy Time | < 10 min | TBD | ⏳ |
-| Code Coverage | > 95% | TBD | ⏳ |
-| Security Scan Pass Rate | 100% | TBD | ⏳ |
-| Automated PR Creation Rate | > 80% | TBD | ⏳ |
-| Mean Time to Recovery (MTTR) | < 5 min | TBD | ⏳ |
-| Deployment Success Rate | > 99% | TBD | ⏳ |
-| Manual Intervention Requests | < 5% | TBD | ⏳ |
+| Metric                       | Target   | Current | Status |
+| ---------------------------- | -------- | ------- | ------ |
+| Test Execution Time          | < 5 min  | TBD     | ⏳     |
+| Build-to-Deploy Time         | < 10 min | TBD     | ⏳     |
+| Code Coverage                | > 95%    | TBD     | ⏳     |
+| Security Scan Pass Rate      | 100%     | TBD     | ⏳     |
+| Automated PR Creation Rate   | > 80%    | TBD     | ⏳     |
+| Mean Time to Recovery (MTTR) | < 5 min  | TBD     | ⏳     |
+| Deployment Success Rate      | > 99%    | TBD     | ⏳     |
+| Manual Intervention Requests | < 5%     | TBD     | ⏳     |
 
 ---
 
 ## 🚀 RAPID EXECUTION ROADMAP
 
 ### Week 1-2: CI/CD Foundation
+
 - ✅ Set up GitHub Actions workflows
 - ✅ Implement automated testing pipeline
 - ✅ Container build automation
 - ✅ Security scanning integration
 
 ### Week 2-3: Infrastructure Automation
+
 - ✅ Terraform IaC setup
 - ✅ Database migration automation
 - ✅ Kubernetes deployment automation
 - ✅ Monitoring stack deployment
 
 ### Week 3-4: Self-Healing & Monitoring
+
 - ✅ Prometheus + Grafana setup
 - ✅ Automated alerting rules
 - ✅ Self-recovery procedures
 - ✅ Incident automation
 
 ### Week 4-5: Documentation & Code Gen
+
 - ✅ Automated API documentation
 - ✅ SDK generation
 - ✅ Code quality automation
 - ✅ Continuous refactoring
 
 ### Week 5-6: Performance & Launch
+
 - ✅ Performance benchmarking
 - ✅ Load testing automation
 - ✅ Release pipeline
@@ -1406,11 +1428,13 @@ jobs:
 ## 📞 NEXT STEPS
 
 1. **Immediate (Today):**
+
    - [ ] Review and approve this plan
    - [ ] Create GitHub secrets for automation
    - [ ] Initialize Terraform state bucket
 
 2. **This Week:**
+
    - [ ] Implement Phase 1 workflows
    - [ ] Test CI/CD pipeline
    - [ ] Document workflows
