@@ -215,11 +215,17 @@ omit = [
 ]
 
 [tool.coverage.report]
+# "raise NotImplementedError" was previously excluded from coverage
+# accounting here -- on a package where ~30 real functions across 9
+# files (backend/watermark_engine/) are nothing but that one line, this
+# is what manufactured the false ">95% coverage" claim: every stub was
+# silently invisible to the coverage report instead of counting as
+# uncovered. Removed 2026-07-03 so coverage reflects reality; see
+# README.md and CLAUDE.md for the real current state.
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "raise AssertionError",
-    "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "if typing.TYPE_CHECKING:",

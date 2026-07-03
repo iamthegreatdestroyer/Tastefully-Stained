@@ -19,6 +19,14 @@
 
 ---
 
+> **Current status (2026-07-03):** the watermarking, C2PA manifest, and
+> blockchain/IPFS anchoring logic described below is not yet implemented
+> (~30 stub functions across 9 files, each `raise NotImplementedError`).
+> Real line coverage is 52.91%, not the >95% previously claimed here —
+> and much of even that reflects stub functions whose entire body is the
+> raise statement, not tested feature logic. A phased implementation
+> plan exists; see the repo's CLAUDE.md for the real scope and status.
+
 ## 🌟 Overview
 
 **Tastefully Stained** is a C2PA-compliant content watermarking solution that combines advanced **hybrid DCT/DWT algorithms** with **blockchain anchoring** for autonomous revenue generation. It provides invisible, robust watermarking for digital images while maintaining full content authenticity and provenance tracking.
@@ -28,7 +36,7 @@
 - **🔒 Invisible Watermarking**: Advanced hybrid DCT/DWT algorithm embeds undetectable watermarks
 - **⛓️ Blockchain Anchoring**: Immutable provenance records on Ethereum with IPFS storage
 - **📜 C2PA Compliant**: Full adherence to Coalition for Content Provenance and Authenticity v2.0
-- **🚀 Production Ready**: Enterprise-grade API with comprehensive test coverage (>95%)
+- **🚧 In Development**: core watermarking/C2PA/blockchain logic is stubbed, not yet implemented (see status note above)
 - **💰 Revenue Generation**: Built-in monetization through licensing verification
 
 ---
