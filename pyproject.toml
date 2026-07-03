@@ -108,7 +108,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-p no:warnings",
-    "--cov=backend",
+    "--cov=watermark_engine",
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-fail-under=80",
@@ -207,7 +207,15 @@ disallow_incomplete_defs = false
 
 [tool.coverage.run]
 branch = true
-source = ["backend"]
+# NOTE: this is relative to the working directory pytest/coverage is
+# actually invoked from, which is `backend/` (see testpaths above, CI's
+# test.yml, and README/CLAUDE.md) -- NOT relative to the repo root where
+# this pyproject.toml lives. `watermark_engine` is a top-level package
+# from that vantage point. Previously this was "backend", which resolved
+# to a nonexistent "backend/backend" when run the intended way and
+# silently produced a false 0% for every watermark_engine/* file
+# regardless of real test coverage. Fixed 2026-07-03.
+source = ["watermark_engine"]
 omit = [
     "*/tests/*",
     "*/__init__.py",
