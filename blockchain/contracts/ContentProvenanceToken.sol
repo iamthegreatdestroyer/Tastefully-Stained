@@ -1,0 +1,1 @@
+../../contracts/ContentProvenanceToken.sol

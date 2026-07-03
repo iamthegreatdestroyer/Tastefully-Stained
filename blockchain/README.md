@@ -6,26 +6,37 @@ development and CI. This is also what backs the `blockchain` service in
 `../docker-compose.yml` (`npx hardhat node`, host port `17740` -> container
 port `8545`, profile `blockchain`).
 
-## Why only two of the three contracts
+## Contracts
 
-`./contracts/` in this directory contains two symlinks:
+`./contracts/` in this directory contains three symlinks back to
+`../contracts/`:
 
 ```
-WatermarkRegistry.sol -> ../../contracts/WatermarkRegistry.sol
-Migrations.sol        -> ../../contracts/Migrations.sol
+WatermarkRegistry.sol      -> ../../contracts/WatermarkRegistry.sol
+Migrations.sol             -> ../../contracts/Migrations.sol
+ContentProvenanceToken.sol -> ../../contracts/ContentProvenanceToken.sol
 ```
 
-`../contracts/ContentProvenanceToken.sol` is **deliberately not symlinked
-in** (and therefore not compiled by this project). It's an ERC721 written
-against OpenZeppelin v4's API (imports the now-removed `utils/Counters.sol`)
-and, independent of that, has real compile errors against v4 too (missing
-`override` specifiers, an unresolved `supportsInterface` diamond-inheritance
-conflict between `ERC721` and `ERC721URIStorage`). It was never wired into
-any deploy path or backend code — the blockchain anchoring work this
-project supports only needs `WatermarkRegistry`. Fixing
-`ContentProvenanceToken.sol` is a separate task; do that in `../contracts/`
-directly (it's not specific to this Hardhat setup) and then symlink it in
-here alongside the other two once it compiles.
+The actually-installed OpenZeppelin version here is v4.9.6 (see
+`node_modules/@openzeppelin/contracts/package.json`; note it's currently
+*extraneous* per `npm ls` -- present in `node_modules`/`package-lock.json`
+but not a declared dependency in `package.json`, likely hoisted from
+`hardhat-toolbox`'s own dependency tree). `ContentProvenanceToken.sol` was
+previously excluded from this project because it had two real compile
+errors against that v4.9.6 API: `_exists(uint256)` was missing an
+`override` specifier (it shadows `ERC721._exists`), and `ERC721` /
+`ERC721URIStorage` both define `supportsInterface`, which Solidity requires
+the most-derived contract to resolve with an explicit override. Both are
+now fixed directly in `../contracts/ContentProvenanceToken.sol` (2026-07-03)
+and it's symlinked in here alongside the other two, with a small sanity
+test at `test/ContentProvenanceToken.test.js` (deploy, mint, refund,
+double-mint/underpayment rejection, owner-only admin functions).
+
+It's still **not wired into any deploy path or backend code** — fixing the
+compile error was the whole scope of that change. `scripts/deploy.js` only
+deploys `WatermarkRegistry`; adding `ContentProvenanceToken` to the deploy
+flow (and to `ethereum_anchor.py`/the Python backend, if it's ever actually
+used) is a separate, larger task.
 
 ## Usage
 

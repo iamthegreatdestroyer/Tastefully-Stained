@@ -30,11 +30,11 @@ module.exports = {
   },
   paths: {
     // ./contracts/*.sol here are individual symlinks back to the repo
-    // root's contracts/ directory (see README.md "Why only two of the
-    // three contracts" for why this isn't a single whole-directory
-    // symlink), so .sol sources are not duplicated. Hardhat refuses
-    // `sources` paths outside the project root (HH1007), hence symlinks
-    // instead of a relative "../contracts".
+    // root's contracts/ directory (see README.md "Contracts" section for
+    // the full list and why this isn't a single whole-directory symlink),
+    // so .sol sources are not duplicated. Hardhat refuses `sources` paths
+    // outside the project root (HH1007), hence symlinks instead of a
+    // relative "../contracts".
     sources: "./contracts",
     artifacts: "./artifacts",
     cache: "./cache",
