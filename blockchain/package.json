@@ -1,0 +1,16 @@
+{
+  "name": "tastefully-stained-blockchain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hardhat dev/CI chain + deployment tooling for WatermarkRegistry (Phase 7 blockchain anchoring)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "node": "hardhat node --hostname 0.0.0.0",
+    "deploy:localhost": "hardhat run scripts/deploy.js --network localhost",
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "hardhat": "^2.22.5",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0"
+  }
+}

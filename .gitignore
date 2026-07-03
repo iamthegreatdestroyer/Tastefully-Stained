@@ -298,3 +298,13 @@ BACKEND_STATUS_ASSESSMENT.md
 TODO_10_EXECUTION_PLAN.md
 HANDOFF_TODO_10_PROGRESS.md
 STARTUP_VERIFICATION_PLAN.md
+# Phase 7: Hardhat local-node deployment records (ephemeral -- address is
+# only valid for the currently-running local node; regenerate by re-running
+# scripts/deploy.js, do not treat as a stable/committed fact)
+blockchain/deployments/
+
+# Phase 7: dev/test-only keypair generated for eventual Sepolia use.
+# NEVER commit this -- it holds a real private key. See the deployment
+# summary / commit message for the address that needs manual Sepolia
+# faucet funding.
+backend/.dev_keys/
