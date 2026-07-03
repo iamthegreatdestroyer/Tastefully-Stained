@@ -192,7 +192,6 @@ module = [
     "pywt.*",
     "scipy.*",
     "web3.*",
-    "ipfshttpclient.*",
     "PIL.*",
 ]
 ignore_missing_imports = true
