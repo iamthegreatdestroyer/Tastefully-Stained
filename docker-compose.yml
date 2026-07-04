@@ -367,7 +367,7 @@ services:
     working_dir: /app
     command: ["npx", "hardhat", "node", "--hostname", "0.0.0.0"]
     ports:
-      - "17740:8545"
+      - "127.0.0.1:17740:8545"
     volumes:
       - ./blockchain:/app
       - blockchain_data:/app/data
