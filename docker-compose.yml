@@ -329,8 +329,8 @@ services:
     container_name: ts-ipfs
     restart: unless-stopped
     ports:
-      - "17750:5001" # API
-      - "17751:8080" # Gateway
+      - "10.77.0.1:17750:5001" # API -- VPN-only (PhantomMesh tunnel IP); admin API has no auth
+      - "10.77.0.1:17751:8080" # Gateway -- VPN-only; matches the other 4 personal/project services restricted 2026-07-04
     environment:
       - IPFS_PROFILE=server
       - IPFS_PATH=/data/ipfs
