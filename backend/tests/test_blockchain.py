@@ -475,6 +475,7 @@ class TestIPFSHandlerInit:
 
 
 @pytest.mark.integration
+@pytest.mark.skip(reason="ts-ipfs decommissioned 2026-07-13 -- no live Kubo node, see docker-compose.yml")
 class TestIPFSHandlerOperations:
     """
     Test IPFS handler operations against a real, running Kubo node.

@@ -76,8 +76,8 @@ services:
       - S3_BUCKET=${S3_BUCKET:-tastefully-stained}
 
       # IPFS
-      - IPFS_API_URL=http://ipfs:5001
-      - IPFS_GATEWAY_URL=http://ipfs:8080
+      # - IPFS_API_URL=http://ipfs:5001      # ts-ipfs decommissioned 2026-07-13; IPFSHandler.from_env() falls back to its documented default (http://localhost:17750) when unset
+      # - IPFS_GATEWAY_URL=http://ipfs:8080     # ts-ipfs decommissioned 2026-07-13
 
       # Blockchain
       - WEB3_PROVIDER_URL=http://blockchain:8545
@@ -265,7 +265,7 @@ services:
       - S3_BUCKET=${S3_BUCKET:-tastefully-stained}
 
       # IPFS
-      - IPFS_API_URL=http://ipfs:5001
+      # - IPFS_API_URL=http://ipfs:5001      # ts-ipfs decommissioned 2026-07-13; IPFSHandler.from_env() falls back to its documented default when unset
 
       # C2PA
       - C2PA_SIGNING_KEY_PATH=/app/keys/signing.pem
@@ -318,42 +318,6 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 256M
-
-  # ===========================================================================
-  # IPFS NODE
-  # ===========================================================================
-  ipfs:
-    image: ipfs/kubo:latest
-    container_name: ts-ipfs
-    restart: unless-stopped
-    ports:
-      - "10.77.0.1:17750:5001" # API -- VPN-only (PhantomMesh tunnel IP); admin API has no auth
-      - "10.77.0.1:17751:8080" # Gateway -- VPN-only; matches the other 4 personal/project services restricted 2026-07-04
-    environment:
-      - IPFS_PROFILE=server
-      - IPFS_PATH=/data/ipfs
-    volumes:
-      - ipfs_data:/data/ipfs
-      - ipfs_staging:/export
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "ipfs dag stat /ipfs/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn || exit 0",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - ts-network
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
-        reservations:
           cpus: "0.25"
           memory: 256M
 
@@ -552,10 +516,6 @@ volumes:
   # Storage
   minio_data:
     name: ts-minio-data
-  ipfs_data:
-    name: ts-ipfs-data
-  ipfs_staging:
-    name: ts-ipfs-staging
 
   # Blockchain
   blockchain_data:
