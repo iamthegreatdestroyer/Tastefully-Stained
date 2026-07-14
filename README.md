@@ -19,13 +19,14 @@
 
 ---
 
-> **Current status (2026-07-03):** the watermarking, C2PA manifest, and
-> blockchain/IPFS anchoring logic described below is not yet implemented
-> (~30 stub functions across 9 files, each `raise NotImplementedError`).
-> Real line coverage is 52.91%, not the >95% previously claimed here —
-> and much of even that reflects stub functions whose entire body is the
-> raise statement, not tested feature logic. A phased implementation
-> plan exists; see the repo's CLAUDE.md for the real scope and status.
+> **Current status (2026-07-14):** the watermarking, C2PA manifest, and
+> blockchain/IPFS anchoring logic described below is implemented — the live
+> source under `backend/watermark_engine/` no longer contains any
+> `raise NotImplementedError` stubs (the only remaining occurrences are in
+> the editor `.history/` local-history snapshots, not the live code). A
+> pytest suite lives under `backend/tests/`. See
+> [NEXT_STEPS_MASTER_ACTION_PLAN.md](NEXT_STEPS_MASTER_ACTION_PLAN.md) for
+> the phased plan and remaining CI/CD and deployment work.
 
 ## 🌟 Overview
 
@@ -36,7 +37,7 @@
 - **🔒 Invisible Watermarking**: Advanced hybrid DCT/DWT algorithm embeds undetectable watermarks
 - **⛓️ Blockchain Anchoring**: Immutable provenance records on Ethereum with IPFS storage
 - **📜 C2PA Compliant**: Full adherence to Coalition for Content Provenance and Authenticity v2.0
-- **🚧 In Development**: core watermarking/C2PA/blockchain logic is stubbed, not yet implemented (see status note above)
+- **✅ Core Logic Implemented**: watermarking, C2PA, and blockchain anchoring are implemented (no `NotImplementedError` stubs remain in the live source)
 - **💰 Revenue Generation**: Built-in monetization through licensing verification
 
 ---
